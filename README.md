@@ -4,5 +4,5 @@
 
 ```bash
 npm i docsify-cli -g
-docsify serve docs
+docsify serve docs (or make start)
 ```

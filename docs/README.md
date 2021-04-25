@@ -2,7 +2,7 @@
 
 An instruction page for how to set up WordPress multiple sites without using WP Multisite feature.<br>
 One of the limitation of using WP Multisite feature is that there are some plugiins which does not work with Multisite.<br>
-This instruction focuses on creating a single Wordpress for each site.
+This instruction focuses on the minimum running cost for hobby sites.
 
 ## Knowledge Requirement
 
@@ -24,6 +24,40 @@ Note: apparently Nginx has some advantage over Apache for performance, and what 
 <img src="./images/wordpress-arch-lightsail.png">
 
 Note: I use Cloudflare for Name Server and CDN. The equivalent service in AWS is Route 53 for Name Server and CloudFront for CDN.
+
+## Domain Setup
+
+Register your domain via Domain Registrar (i.e. Godaddy, Google Domain, Route 53)
+
+## Nameserver Setup
+
+### Cloudflare
+
+1. Access Cloudflare Console > DNS
+2. Set up A record and CNAME such as the screenshot below<br>
+    <img src="./images/cloudflare-dns-config.png" width="50%"><br>
+    Since you do not have an IP yet, just remember to come back here after you get static IP
+3. You should also find Nameserver info on the same page, copy them for the next part
+
+```
+Q: Can I point to the same IP address from another domain(s)?
+A: Yes, this instruction focusing on creating one single server consuming different domains.
+```
+
+### Domain Registrar
+
+1. Access your domain registrar
+2. Find the section where you can change Nameserver. Here is the screenshot for Google Domain<br>
+    <img src="./images/googledomain-ns-config.png" width="50%">
+3. Configure Name Server pointing to your favorite Nameserver service such as Cloudflare<br>
+    (The Domain pointing to your Nameserver takes up to 1 day.)
+
+```
+Q: Can I point to the same Nameserver from another domain(s)?
+A: Yes, NGINX handle the routing and points to an appropriate WordPress site with nginx conf file which you can find in the following instruction.
+```
+
+So now you have set up the flow **Domain** > **Nameserver** > **Server**
 
 ## Instance Setup
 
@@ -192,14 +226,17 @@ Note: alternatively you can ssh to the server from **Connect** tab and by clicki
     vi /etc/ssl/sample.com.pem
     ```
 
-    Note: SSL cert config is out of scope for this instruction, but if you are using Cloudflare, you can generate the cert from the [this instruction](https://support.cloudflare.com/hc/en-us/articles/115000479507-Managing-Cloudflare-Origin-CA-certificates#h_30e5cf09-6e98-48e1-a9f1-427486829feb)
+    Note: SSL cert config is out of scope for this instruction, but if you are using Cloudflare, you can generate the cert from the [this instruction](https://support.cloudflare.com/hc/en-us/articles/115000479507)
 
-2. Add a NGINX conf file into `/etc/nginx/conf.d` (replace `sample.com` with your domain)
+2. Add a NGINX conf file into `/etc/nginx/conf.d`. (replace `sample.com` with your domain)
+
+    File name: `sample.com.conf`
 
     ```conf
     # sample.com
     server {
-        listen       443 ssl;
+        listen       443 ssl http2;
+        listen       [::]:443 ssl http2;
         server_name  sample.com www.sample.com;
         root         /var/www/sample.com;
         index        index.html index.htm index.php;
@@ -217,6 +254,8 @@ Note: alternatively you can ssh to the server from **Connect** tab and by clicki
     }
     ```
 
+    Note: Repeat this step if you have another site(s)
+
 3. Create site folders
 
     ```bash
@@ -226,19 +265,35 @@ Note: alternatively you can ssh to the server from **Connect** tab and by clicki
     chown nginx:nginx /var/www
     ```
 
-3. Restart nginx
+    Note: Repeat this step if you have another site(s)
+
+4. Restart nginx
 
     ```bash
     sudo systemctl restart nginx
     ```
 
-4. Test http://IP_ADDRESS/test.php
+5. Test http://IP_ADDRESS/test.php
 
-5. execute the following for error log
+6. execute the following for error log
 
     ```bash
     sudo tail -f /var/log/nginx/error.log
     ```
+
+Note: if something got stuck by error, check the following Nginx files by referring to [this](https://github.com/htakemoto/wordpress-hosting/blob/main/nginx)
+
+```
+/etc
++- nginx
+   +- conf.d
+   |  +- php-fpm.conf
+   |  +- sample.com.conf
+   +- default.d
+   |  +- php.conf
+   +- nginx.conf
+```
+
 
 ### MySQL Setup
 
@@ -263,8 +318,13 @@ Note: alternatively you can ssh to the server from **Connect** tab and by clicki
     execute the following SQL script
 
     ```sql
+    -- for sample.com
     CREATE DATABASE IF NOT EXISTS `sample`;
+    -- for demo.com
+    CREATE DATABASE IF NOT EXISTS `demo`;
     ```
+
+    Note: WordPress requires database for each site
 
 3. Setup DB User
 
@@ -277,8 +337,12 @@ Note: alternatively you can ssh to the server from **Connect** tab and by clicki
     execute the following SQL script
 
     ```sql
+    -- for sample.com
     CREATE USER 'sample'@'localhost' IDENTIFIED BY 'changeme';
     GRANT ALL ON sample.* TO 'sample'@'localhost' WITH GRANT OPTION;
+    -- for demo.com
+    CREATE USER 'demo'@'localhost' IDENTIFIED BY 'changeme';
+    GRANT ALL ON demo.* TO 'demo'@'localhost' WITH GRANT OPTION;
     FLUSH PRIVILEGES;
     ```
 
@@ -286,6 +350,7 @@ Note: alternatively you can ssh to the server from **Connect** tab and by clicki
 
     ```sql
     SET PASSWORD FOR 'sample'@'localhost' = PASSWORD('changeme');
+    SET PASSWORD FOR 'demo'@'localhost' = PASSWORD('changeme');
     ```
 
 ### File Permission Setup
@@ -312,6 +377,8 @@ chmod 2775 /var/www/sample.com
 # (make sure group permissions i.e. 644 for file, 755 for folder under this directory)
 ll /var/www/sample.com
 ```
+
+Note: Repeat this step if you have another site(s)
 
 ## Import Existing WordPress
 

@@ -1,0 +1,2 @@
+start:
+	docsify serve docs
